@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/tally_provider.dart';
 import '../widgets/add_event_dialog.dart';
 import '../../../../models/tally_event.dart';
+import '../../../../utils/icon_mapper.dart';
+import '../../../../utils/color_extensions.dart';
 
 class TalliesPage extends ConsumerWidget {
   const TalliesPage({super.key});
@@ -25,7 +27,7 @@ class TalliesPage extends ConsumerWidget {
           }
           return RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(tallyEventsProvider);
+              ref.refreshAfterEventChange();
             },
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -36,16 +38,30 @@ class TalliesPage extends ConsumerWidget {
                   key: ValueKey(event.id),
                   event: event,
                   onIncrement: () async {
-                    HapticFeedback.lightImpact();
-                    await service.incrementTally(event.id);
-                    ref.invalidate(tallyEventsProvider);
-                    ref.invalidate(tallyLogsProvider);
+                    try {
+                      HapticFeedback.lightImpact();
+                      await service.incrementTally(event.id);
+                      ref.refreshAfterTallyUpdate();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Unable to update tally. Please try again.')),
+                        );
+                      }
+                    }
                   },
                   onDelete: () async {
-                    HapticFeedback.mediumImpact();
-                    await service.deleteEvent(event.id);
-                    ref.invalidate(tallyEventsProvider);
-                    ref.invalidate(tallyLogsProvider);
+                    try {
+                      HapticFeedback.mediumImpact();
+                      await service.deleteEvent(event.id);
+                      ref.refreshAfterEventChange();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Unable to delete tally. Please try again.')),
+                        );
+                      }
+                    }
                   },
                 );
               },
@@ -54,7 +70,20 @@ class TalliesPage extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
-          child: Text('Error: $error'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 16),
+              Text('Something went wrong', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () => ref.refreshAfterEventChange(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -73,20 +102,20 @@ class TalliesPage extends ConsumerWidget {
           Icon(
             Icons.event_note,
             size: 80,
-            color: Colors.grey[400],
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.38),
           ),
           const SizedBox(height: 24),
           Text(
             'No tallies yet',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 8),
           Text(
             'Tap + to create your first tally',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[500],
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.5),
                 ),
           ),
         ],
@@ -99,17 +128,25 @@ class TalliesPage extends ConsumerWidget {
       context: context,
       builder: (context) => AddEventDialog(
         onSave: (name, icon, color, type) async {
-          final service = ref.read(tallyServiceProvider);
-          final event = TallyEvent(
-            id: '',
-            name: name,
-            icon: icon,
-            color: color,
-            createdAt: DateTime.now(),
-            type: type,
-          );
-          await service.addEvent(event);
-          ref.invalidate(tallyEventsProvider);
+          try {
+            final service = ref.read(tallyServiceProvider);
+            final event = TallyEvent(
+              id: '',
+              name: name,
+              icon: icon,
+              color: color,
+              createdAt: DateTime.now(),
+              type: type,
+            );
+            await service.addEvent(event);
+            ref.refreshAfterEventChange();
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Unable to create tally. Please try again.')),
+              );
+            }
+          }
         },
       ),
     );
@@ -131,33 +168,54 @@ class _TallyCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final count = ref.watch(tallyCountProvider(event.id));
-    final color = event.color != null
-        ? Color(int.parse(event.color!.replaceFirst('#', '0xFF')))
-        : Theme.of(context).colorScheme.primary;
+    final color = parseHexColor(event.color, Theme.of(context).colorScheme.primary);
 
     return Dismissible(
       key: key!,
       direction: DismissDirection.endToStart,
       background: Container(
         decoration: BoxDecoration(
-          color: Colors.red,
+          color: Theme.of(context).colorScheme.errorContainer,
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
-        child: const Icon(
+        child: Icon(
           Icons.delete_outline,
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.onErrorContainer,
           size: 32,
         ),
       ),
+      confirmDismiss: (_) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete Tally'),
+            content: Text('Are you sure you want to delete "${event.name}"?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ?? false;
+      },
       onDismissed: (_) => onDelete(),
       child: Card(
         elevation: 0,
         margin: const EdgeInsets.only(bottom: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.grey.shade200, width: 1),
+          side: BorderSide(color: Theme.of(context).dividerColor, width: 1),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -167,11 +225,11 @@ class _TallyCard extends ConsumerWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  _getIconData(event.icon),
+                  getIconData(event.icon),
                   color: color,
                   size: 28,
                 ),
@@ -183,6 +241,8 @@ class _TallyCard extends ConsumerWidget {
                   children: [
                     Text(
                       event.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
@@ -219,19 +279,24 @@ class _TallyCard extends ConsumerWidget {
   Widget _buildTypeChip(BuildContext context, TallyType type) {
     String label;
     Color bgColor;
+    Color textColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     switch (type) {
       case TallyType.standard:
         label = 'Standard';
-        bgColor = Colors.blue.withOpacity(0.1);
+        bgColor = Colors.blue.withValues(alpha:0.1);
+        textColor = isDark ? Colors.blue.shade300 : Colors.blue.shade700;
         break;
       case TallyType.partnerPositive:
         label = 'Partner (+)';
-        bgColor = Colors.green.withOpacity(0.1);
+        bgColor = Colors.green.withValues(alpha:0.1);
+        textColor = isDark ? Colors.green.shade300 : Colors.green.shade700;
         break;
       case TallyType.partnerNegative:
         label = 'Partner (-)';
-        bgColor = Colors.red.withOpacity(0.1);
+        bgColor = Colors.red.withValues(alpha:0.1);
+        textColor = isDark ? Colors.red.shade300 : Colors.red.shade700;
         break;
     }
 
@@ -244,30 +309,13 @@ class _TallyCard extends ConsumerWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: bgColor.withOpacity(0.8),
+              color: textColor,
               fontWeight: FontWeight.w500,
             ),
       ),
     );
   }
 
-  IconData _getIconData(String? iconName) {
-    // Simple mapping of common icon names to IconData
-    const iconMap = {
-      'star': Icons.star,
-      'favorite': Icons.favorite,
-      'thumb_up': Icons.thumb_up,
-      'thumb_down': Icons.thumb_down,
-      'check': Icons.check_circle,
-      'close': Icons.cancel,
-      'water_drop': Icons.water_drop,
-      'coffee': Icons.coffee,
-      'fitness': Icons.fitness_center,
-      'book': Icons.book,
-      'work': Icons.work,
-    };
-    return iconMap[iconName] ?? Icons.event;
-  }
 }
 
 class _SpringIncrementButton extends StatefulWidget {
@@ -314,11 +362,15 @@ class _SpringIncrementButtonState extends State<_SpringIncrementButton>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _handleTapDown(),
-      onTapUp: (_) => _handleTapUp(),
-      onTapCancel: () => _controller.reverse(),
-      child: AnimatedBuilder(
+    return Semantics(
+      button: true,
+      label: 'Increment tally',
+      child: GestureDetector(
+        excludeFromSemantics: true,
+        onTapDown: (_) => _handleTapDown(),
+        onTapUp: (_) => _handleTapUp(),
+        onTapCancel: () => _controller.reverse(),
+        child: AnimatedBuilder(
         animation: _scaleAnimation,
         builder: (context, child) {
           return Transform.scale(
@@ -331,7 +383,7 @@ class _SpringIncrementButtonState extends State<_SpringIncrementButton>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: widget.color.withOpacity(0.3),
+                    color: widget.color.withValues(alpha:0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -345,6 +397,7 @@ class _SpringIncrementButtonState extends State<_SpringIncrementButton>
             ),
           );
         },
+      ),
       ),
     );
   }

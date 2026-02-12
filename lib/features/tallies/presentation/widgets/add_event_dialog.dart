@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../models/tally_event.dart';
 import '../../../../utils/input_sanitizer.dart';
+import '../../../../utils/color_extensions.dart';
 
 class AddEventDialog extends StatefulWidget {
   final Function(String name, String icon, String color, TallyType type) onSave;
@@ -20,16 +21,16 @@ class _AddEventDialogState extends State<AddEventDialog> {
   String _selectedColor = '#007AFF'; // Blue
   TallyType _selectedType = TallyType.standard;
 
-  final List<String> _colors = [
-    '#FF3B30', // Red
-    '#FF9500', // Orange
-    '#FFCC00', // Yellow
-    '#4CD964', // Green
-    '#5AC8FA', // Teal Blue
-    '#007AFF', // Blue
-    '#5856D6', // Purple
-    '#FF2D55', // Pink
-  ];
+  final Map<String, String> _colorNames = {
+    '#FF3B30': 'Red',
+    '#FF9500': 'Orange',
+    '#FFCC00': 'Yellow',
+    '#4CD964': 'Green',
+    '#5AC8FA': 'Teal Blue',
+    '#007AFF': 'Blue',
+    '#5856D6': 'Purple',
+    '#FF2D55': 'Pink',
+  };
 
   final Map<String, IconData> _icons = {
     'star': Icons.star,
@@ -84,7 +85,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
               const Text('Type', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               DropdownButtonFormField<TallyType>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -115,31 +116,37 @@ class _AddEventDialogState extends State<AddEventDialog> {
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                children: _colors.map((colorHex) {
+                children: _colorNames.entries.map((entry) {
+                  final colorHex = entry.key;
+                  final colorName = entry.value;
                   final isSelected = _selectedColor == colorHex;
-                  final color = Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedColor = colorHex),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: isSelected
-                            ? Border.all(color: Colors.black, width: 3)
+                  final color = parseHexColor(colorHex, Theme.of(context).colorScheme.primary);
+                  return Semantics(
+                    label: '$colorName color${isSelected ? ', selected' : ''}',
+                    button: true,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedColor = colorHex),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: isSelected
+                              ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 3)
+                              : null,
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withValues(alpha:0.4),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: isSelected
+                            ? const Icon(Icons.check, color: Colors.white, size: 24)
                             : null,
-                        boxShadow: [
-                          BoxShadow(
-                            color: color.withOpacity(0.4),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
-                      child: isSelected
-                          ? const Icon(Icons.check, color: Colors.white, size: 24)
-                          : null,
                     ),
                   );
                 }).toList(),
@@ -154,22 +161,27 @@ class _AddEventDialogState extends State<AddEventDialog> {
                 runSpacing: 12,
                 children: _icons.entries.map((entry) {
                   final isSelected = _selectedIcon == entry.key;
-                  final color = Color(int.parse(_selectedColor.replaceFirst('#', '0xFF')));
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedIcon = entry.key),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? color.withOpacity(0.2) : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                        border: isSelected
-                            ? Border.all(color: color, width: 2)
-                            : Border.all(color: Colors.transparent),
-                      ),
-                      child: Icon(
-                        entry.value,
-                        color: isSelected ? color : Colors.grey,
-                        size: 28,
+                  final color = parseHexColor(_selectedColor, Theme.of(context).colorScheme.primary);
+                  return Semantics(
+                    label: '${entry.key} icon${isSelected ? ', selected' : ''}',
+                    button: true,
+                    child: GestureDetector(
+                      excludeFromSemantics: true,
+                      onTap: () => setState(() => _selectedIcon = entry.key),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? color.withValues(alpha:0.2) : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                          border: isSelected
+                              ? Border.all(color: color, width: 2)
+                              : Border.all(color: Colors.transparent),
+                        ),
+                        child: Icon(
+                          entry.value,
+                          color: isSelected ? color : Theme.of(context).colorScheme.onSurfaceVariant,
+                          size: 28,
+                        ),
                       ),
                     ),
                   );
@@ -185,15 +197,18 @@ class _AddEventDialogState extends State<AddEventDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () {
+          onPressed: () async {
             if (_formKey.currentState!.validate()) {
-              widget.onSave(
+              final navigator = Navigator.of(context);
+              await widget.onSave(
                 InputSanitizer.sanitizeName(_nameController.text.trim()),
                 _selectedIcon,
                 _selectedColor,
                 _selectedType,
               );
-              Navigator.of(context).pop();
+              if (mounted) {
+                navigator.pop();
+              }
             }
           },
           child: const Text('Create'),

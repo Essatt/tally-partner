@@ -80,39 +80,35 @@ class _AddActionDialogState extends State<AddActionDialog> {
               // Action Type
               const Text('Action Type', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Positive'),
-                      subtitle: const Text('Adds to balance'),
-                      value: 'positive',
-                      groupValue: _selectedType,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _selectedType = value);
-                        }
-                      },
-                      activeColor: Colors.green,
-                      contentPadding: EdgeInsets.zero,
+              RadioGroup<String>(
+                groupValue: _selectedType,
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedType = value);
+                  }
+                },
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: RadioListTile<String>(
+                        title: const Text('Positive'),
+                        subtitle: const Text('Adds to balance'),
+                        value: 'positive',
+                        activeColor: Theme.of(context).colorScheme.tertiary,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Negative'),
-                      subtitle: const Text('Subtracts from balance'),
-                      value: 'negative',
-                      groupValue: _selectedType,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _selectedType = value);
-                        }
-                      },
-                      activeColor: Colors.red,
-                      contentPadding: EdgeInsets.zero,
+                    Expanded(
+                      child: RadioListTile<String>(
+                        title: const Text('Negative'),
+                        subtitle: const Text('Subtracts from balance'),
+                        value: 'negative',
+                        activeColor: Theme.of(context).colorScheme.error,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
 
               // Quick Value Buttons
@@ -148,15 +144,16 @@ class _AddActionDialogState extends State<AddActionDialog> {
           onPressed: () async {
             if (_isLoading) return;
             if (!_formKey.currentState!.validate()) return;
-            
+
             setState(() => _isLoading = true);
-            
+
             final sanitizedValue = InputSanitizer.sanitizeMonetaryValue(_valueController.text);
             if (sanitizedValue == null) {
-              setState(() => _isLoading = false);
+              if (mounted) setState(() => _isLoading = false);
               return;
             }
-            
+
+            final navigator = Navigator.of(context);
             final value = sanitizedValue;
             final sign = _selectedType == 'positive' ? 1 : -1;
             await widget.onSave(
@@ -164,20 +161,20 @@ class _AddActionDialogState extends State<AddActionDialog> {
               sign * value,
               _selectedType,
             );
-            
+
             if (mounted) {
-              setState(() => _isLoading = false);
+              navigator.pop();
             }
           },
           child: _isLoading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 20,
                   height: 20,
                   child: Center(
                     child: SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary),
                       ),
                     ),
                   )

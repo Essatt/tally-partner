@@ -5,7 +5,7 @@ import '../widgets/add_action_dialog.dart';
 import '../widgets/setup_budget_dialog.dart';
 import '../../../../models/partner_config.dart';
 import '../../../../models/tally_log.dart';
-import '../../../../models/tally_event.dart';
+import '../../../../services/tally_repository.dart';
 
 class PartnerBudgetPage extends ConsumerWidget {
   const PartnerBudgetPage({super.key});
@@ -28,8 +28,7 @@ class PartnerBudgetPage extends ConsumerWidget {
           }
           return RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(partnerConfigProvider);
-              ref.invalidate(tallyLogsProvider);
+              ref.refreshAll();
             },
             child: Column(
               children: [
@@ -45,14 +44,27 @@ class PartnerBudgetPage extends ConsumerWidget {
                         padding: const EdgeInsets.all(16),
                         itemCount: logs.length,
                         itemBuilder: (context, index) {
-                          final log = logs.reversed.toList()[index];
-                          return _LogItem(log: log);
+                          final log = logs[logs.length - 1 - index];
+                          return _LogItem(key: ValueKey(log.id), log: log);
                         },
                       );
                     },
                     loading: () => const Center(child: CircularProgressIndicator()),
                     error: (error, stack) => Center(
-                      child: Text('Error: $error'),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+                          const SizedBox(height: 16),
+                          Text('Something went wrong', style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 8),
+                          FilledButton.icon(
+                            onPressed: () => ref.refreshAfterTallyUpdate(),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -62,7 +74,20 @@ class PartnerBudgetPage extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
-          child: Text('Error: $error'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 16),
+              Text('Something went wrong', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () => ref.refreshAfterConfigChange(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -73,7 +98,7 @@ class PartnerBudgetPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildSetupPrompt(BuildContext context, WidgetRef ref, dynamic service) {
+  Widget _buildSetupPrompt(BuildContext context, WidgetRef ref, TallyRepository service) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -83,13 +108,13 @@ class PartnerBudgetPage extends ConsumerWidget {
             Icon(
               Icons.account_balance_wallet,
               size: 80,
-              color: Colors.grey[400],
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.38),
             ),
             const SizedBox(height: 24),
             Text(
               'Partner Budget Not Set Up',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.grey[700],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 12),
@@ -97,7 +122,7 @@ class PartnerBudgetPage extends ConsumerWidget {
               'Set up your partner budget to start tracking relationship balance',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey[500],
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.5),
                   ),
             ),
             const SizedBox(height: 32),
@@ -115,7 +140,9 @@ class PartnerBudgetPage extends ConsumerWidget {
   Widget _buildBalanceCard(BuildContext context, PartnerConfig config) {
     final balance = config.currentBalance;
     final isPositive = balance >= 0;
-    final balanceColor = isPositive ? Colors.green : Colors.red;
+    final balanceColor = isPositive
+        ? Theme.of(context).colorScheme.tertiary
+        : Theme.of(context).colorScheme.error;
 
     return Container(
       width: double.infinity,
@@ -126,19 +153,19 @@ class PartnerBudgetPage extends ConsumerWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            balanceColor.withOpacity(0.1),
-            balanceColor.withOpacity(0.2),
+            balanceColor.withValues(alpha:0.1),
+            balanceColor.withValues(alpha:0.2),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: balanceColor.withOpacity(0.3), width: 2),
+        border: Border.all(color: balanceColor.withValues(alpha:0.3), width: 2),
       ),
       child: Column(
         children: [
           Text(
             'Current Balance',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 8),
@@ -153,7 +180,7 @@ class PartnerBudgetPage extends ConsumerWidget {
           Text(
             isPositive ? 'Positive Balance' : 'Negative Balance',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
         ],
@@ -171,9 +198,9 @@ class PartnerBudgetPage extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,7 +211,7 @@ class PartnerBudgetPage extends ConsumerWidget {
               Text(
                 'Budget Limit',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Colors.grey[700],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
               Text(
@@ -200,9 +227,11 @@ class PartnerBudgetPage extends ConsumerWidget {
             borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(
               value: percentage / 100,
-              backgroundColor: Colors.grey.shade200,
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation<Color>(
-                isPositive ? Colors.green : Colors.red,
+                isPositive
+                    ? Theme.of(context).colorScheme.tertiary
+                    : Theme.of(context).colorScheme.error,
               ),
               minHeight: 12,
             ),
@@ -211,7 +240,7 @@ class PartnerBudgetPage extends ConsumerWidget {
           Text(
             '${percentage.toStringAsFixed(1)}% of budget used',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
         ],
@@ -226,14 +255,14 @@ class PartnerBudgetPage extends ConsumerWidget {
         children: [
           Icon(
             Icons.history,
-            size: 64,
-            color: Colors.grey[400],
+            size: 80,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.38),
           ),
           const SizedBox(height: 16),
           Text(
             'No actions logged yet',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
         ],
@@ -241,7 +270,7 @@ class PartnerBudgetPage extends ConsumerWidget {
     );
   }
 
-  void _showSetupDialog(BuildContext context, WidgetRef ref, dynamic service) {
+  void _showSetupDialog(BuildContext context, WidgetRef ref, TallyRepository service) {
     showDialog(
       context: context,
       builder: (context) => SetupBudgetDialog(
@@ -250,7 +279,7 @@ class PartnerBudgetPage extends ConsumerWidget {
             budgetLimit: budget,
             partnerName: name,
           );
-          ref.invalidate(partnerConfigProvider);
+          ref.refreshAfterConfigChange();
         },
       ),
     );
@@ -266,7 +295,9 @@ class PartnerBudgetPage extends ConsumerWidget {
           data: (config) {
             if (config == null) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                _showSetupDialog(context, ref, ref.read(tallyServiceProvider));
+                if (context.mounted) {
+                  _showSetupDialog(context, ref, ref.read(tallyServiceProvider));
+                }
               });
               return const SizedBox.shrink();
             }
@@ -274,31 +305,26 @@ class PartnerBudgetPage extends ConsumerWidget {
             return AddActionDialog(
               onSave: (name, value, type) async {
                 final tallyService = ref.read(tallyServiceProvider);
-                final event = TallyEvent(
-                  id: '',
+                await tallyService.logPartnerAction(
                   name: name,
-                  icon: type == 'positive' ? 'thumb_up' : 'thumb_down',
-                  color: type == 'positive' ? '#4CD964' : '#FF3B30',
-                  createdAt: DateTime.now(),
-                  type: type == 'positive'
-                      ? TallyType.partnerPositive
-                      : TallyType.partnerNegative,
+                  value: value,
+                  type: type,
                 );
-                await tallyService.addEvent(event);
-
-                final newBalance = config.currentBalance + value;
-                await tallyService.updatePartnerConfig(
-                  config.copyWith(currentBalance: newBalance),
-                );
-
-                ref.invalidate(partnerConfigProvider);
-                ref.invalidate(tallyEventsProvider);
-                ref.invalidate(tallyLogsProvider);
+                ref.refreshAfterPartnerAction();
               },
             );
           },
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, __) => AlertDialog(
+            title: const Text('Error'),
+            content: const Text('Failed to load budget configuration.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -308,26 +334,28 @@ class PartnerBudgetPage extends ConsumerWidget {
 class _LogItem extends ConsumerWidget {
   final TallyLog log;
 
-  const _LogItem({required this.log});
+  const _LogItem({super.key, required this.log});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isPositive = log.valueAdjustment >= 0;
-    final color = isPositive ? Colors.green : Colors.red;
+    final color = isPositive
+        ? Theme.of(context).colorScheme.tertiary
+        : Theme.of(context).colorScheme.error;
     final icon = isPositive ? Icons.arrow_upward : Icons.arrow_downward;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200, width: 1),
+        side: BorderSide(color: Theme.of(context).dividerColor, width: 1),
       ),
       child: ListTile(
         leading: Container(
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha:0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: color),
@@ -335,7 +363,7 @@ class _LogItem extends ConsumerWidget {
         title: Text(isPositive ? 'Positive Action' : 'Negative Action'),
         subtitle: Text(
           _formatDate(log.timestamp),
-          style: TextStyle(color: Colors.grey[600]),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         trailing: Text(
           '${isPositive ? '+' : ''}\${log.valueAdjustment.toStringAsFixed(2)}',

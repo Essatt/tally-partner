@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../tallies/presentation/providers/tally_provider.dart';
 import '../../../../models/tally_event.dart';
 import '../../../../models/tally_log.dart';
+import '../../../../models/tally_stats.dart';
+import '../../../../utils/icon_mapper.dart';
+import '../../../../utils/color_extensions.dart';
 
 class StatsPage extends ConsumerStatefulWidget {
   const StatsPage({super.key});
@@ -43,7 +46,22 @@ class _StatsPageState extends ConsumerState<StatsPage> {
             },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, stack) => Center(
-              child: Text('Error: $error'),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+                  const SizedBox(height: 16),
+                  Text('Something went wrong', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: () {
+                      ref.refreshAfterEventChange();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -86,7 +104,7 @@ class _StatsPageState extends ConsumerState<StatsPage> {
     );
   }
 
-  Widget _buildSummaryCard(Map<String, dynamic> stats) {
+  Widget _buildSummaryCard(TallyStats stats) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(16),
@@ -96,13 +114,13 @@ class _StatsPageState extends ConsumerState<StatsPage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.1),
-            Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            Theme.of(context).colorScheme.primary.withValues(alpha:0.1),
+            Theme.of(context).colorScheme.primary.withValues(alpha:0.2),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha:0.3),
           width: 2,
         ),
       ),
@@ -111,12 +129,12 @@ class _StatsPageState extends ConsumerState<StatsPage> {
           Text(
             'Total Tallies',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 8),
           Text(
-            '${stats['totalCount']}',
+            '${stats.totalCount}',
             style: Theme.of(context).textTheme.displayMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.primary,
@@ -124,9 +142,9 @@ class _StatsPageState extends ConsumerState<StatsPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'this ${_timeframe}',
+            'this $_timeframe',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
         ],
@@ -134,8 +152,8 @@ class _StatsPageState extends ConsumerState<StatsPage> {
     );
   }
 
-  Widget _buildEventStats(List<TallyEvent> events, Map<String, dynamic> stats) {
-    final eventStats = stats['byEvent'] as Map<String, int>;
+  Widget _buildEventStats(List<TallyEvent> events, TallyStats stats) {
+    final eventStats = stats.byEvent;
 
     if (eventStats.isEmpty) {
       return Center(
@@ -144,21 +162,21 @@ class _StatsPageState extends ConsumerState<StatsPage> {
           children: [
             Icon(
               Icons.bar_chart,
-              size: 64,
-              color: Colors.grey[400],
+              size: 80,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.38),
             ),
             const SizedBox(height: 16),
             Text(
               'No statistics yet',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
               'Start tracking to see your stats',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[500],
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.5),
                   ),
             ),
           ],
@@ -175,10 +193,11 @@ class _StatsPageState extends ConsumerState<StatsPage> {
         if (count == 0) return const SizedBox.shrink();
 
         return _EventStatCard(
+          key: ValueKey(event.id),
           event: event,
           count: count,
-          percentage: stats['totalCount'] > 0
-              ? (count / stats['totalCount'] * 100)
+          percentage: stats.totalCount > 0
+              ? (count / stats.totalCount * 100)
               : 0,
         );
       },
@@ -204,13 +223,13 @@ class _StatsPageState extends ConsumerState<StatsPage> {
     }
 
     return logs
-        .where((log) => 
-            log.timestamp.isAfter(startDate) || log.timestamp.isAtSameMomentAs(startDate) &&
+        .where((log) =>
+            (log.timestamp.isAfter(startDate) || log.timestamp.isAtSameMomentAs(startDate)) &&
             log.timestamp.isBefore(now))
         .toList();
   }
 
-  Map<String, dynamic> _calculateStats(
+  TallyStats _calculateStats(
     List<TallyEvent> events,
     List<TallyLog> logs,
   ) {
@@ -218,14 +237,12 @@ class _StatsPageState extends ConsumerState<StatsPage> {
     Map<String, int> byEvent = {};
 
     for (final log in logs) {
-      totalCount++;
-      byEvent[log.eventId] = (byEvent[log.eventId] ?? 0) + 1;
+      final adjustment = log.valueAdjustment.round().abs();
+      totalCount += adjustment;
+      byEvent[log.eventId] = (byEvent[log.eventId] ?? 0) + adjustment;
     }
 
-    return {
-      'totalCount': totalCount,
-      'byEvent': byEvent,
-    };
+    return TallyStats(totalCount: totalCount, byEvent: byEvent);
   }
 }
 
@@ -235,6 +252,7 @@ class _EventStatCard extends StatelessWidget {
   final double percentage;
 
   const _EventStatCard({
+    super.key,
     required this.event,
     required this.count,
     required this.percentage,
@@ -242,15 +260,13 @@ class _EventStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = event.color != null
-        ? Color(int.parse(event.color!.replaceFirst('#', '0xFF')))
-        : Theme.of(context).colorScheme.primary;
+    final color = parseHexColor(event.color, Theme.of(context).colorScheme.primary);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200, width: 1),
+        side: BorderSide(color: Theme.of(context).dividerColor, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -263,11 +279,11 @@ class _EventStatCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    _getIconData(event.icon),
+                    getIconData(event.icon),
                     color: color,
                     size: 24,
                   ),
@@ -279,6 +295,8 @@ class _EventStatCard extends StatelessWidget {
                     children: [
                       Text(
                         event.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
@@ -286,7 +304,7 @@ class _EventStatCard extends StatelessWidget {
                       Text(
                         '$count tally${count == 1 ? '' : 'ies'}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                       ),
                     ],
@@ -306,7 +324,7 @@ class _EventStatCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: percentage / 100,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 valueColor: AlwaysStoppedAnimation<Color>(color),
                 minHeight: 8,
               ),
@@ -317,20 +335,4 @@ class _EventStatCard extends StatelessWidget {
     );
   }
 
-  IconData _getIconData(String? iconName) {
-    const iconMap = {
-      'star': Icons.star,
-      'favorite': Icons.favorite,
-      'thumb_up': Icons.thumb_up,
-      'thumb_down': Icons.thumb_down,
-      'check': Icons.check_circle,
-      'close': Icons.cancel,
-      'water_drop': Icons.water_drop,
-      'coffee': Icons.coffee,
-      'fitness': Icons.fitness_center,
-      'book': Icons.book,
-      'work': Icons.work,
-    };
-    return iconMap[iconName] ?? Icons.event;
-  }
 }

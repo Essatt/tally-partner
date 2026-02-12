@@ -1,9 +1,11 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../models/tally_event.dart';
 import '../models/tally_log.dart';
 import '../models/partner_config.dart';
+import 'tally_repository.dart';
 
-class TallyService {
+class TallyService implements TallyRepository {
   // Constants for box names
   static const String _eventsBoxName = 'tally_events';
   static const String _logsBoxName = 'tally_logs';
@@ -20,25 +22,46 @@ class TallyService {
   static final TallyService _instance = TallyService._internal();
   factory TallyService() => _instance;
 
-  /// Initializes the service by opening Hive boxes.
-  /// Note: Hive.initFlutter() and Adapter registration are handled in main.dart.
+  @override
   Future<void> init() async {
-    try {
-      _eventsBox = await Hive.openBox<TallyEvent>(_eventsBoxName);
-      _logsBox = await Hive.openBox<TallyLog>(_logsBoxName);
-      _configBox = await Hive.openBox<PartnerConfig>(_configBoxName);
-    } catch (e) {
-      rethrow;
-    }
+    _eventsBox = await _openBoxSafe<TallyEvent>(_eventsBoxName);
+    _logsBox = await _openBoxSafe<TallyLog>(_logsBoxName);
+    _configBox = await _openBoxSafe<PartnerConfig>(_configBoxName);
   }
 
+  Future<Box<T>> _openBoxSafe<T>(String name) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await Hive.openBox<T>(name);
+      } on HiveError catch (e) {
+        if (e.message.contains('corrupted') ||
+            e.message.contains('invalid') ||
+            attempt == 2) {
+          await Hive.deleteBoxFromDisk(name);
+          return await Hive.openBox<T>(name);
+        }
+        await Future.delayed(Duration(milliseconds: 100 * (attempt + 1)));
+      } catch (_) {
+        if (attempt == 2) {
+          await Hive.deleteBoxFromDisk(name);
+          return await Hive.openBox<T>(name);
+        }
+        await Future.delayed(Duration(milliseconds: 100 * (attempt + 1)));
+      }
+    }
+    // Fallback - should not reach here
+    return await Hive.openBox<T>(name);
+  }
+
+  static const _uuid = Uuid();
+
   String _generateId() {
-    return DateTime.now().microsecondsSinceEpoch.toString();
+    return _uuid.v4();
   }
 
   // --- Partner Config Operations ---
 
-  /// Initializes the partner configuration if it does not already exist.
+  @override
   Future<void> initPartnerConfig({
     String? id,
     double budgetLimit = 0.0,
@@ -58,12 +81,12 @@ class TallyService {
     }
   }
 
-  /// Retrieves the active partner configuration.
+  @override
   PartnerConfig? getPartnerConfig() {
     return _configBox.get(_configKey);
   }
 
-  /// Updates the active partner configuration using copyWith for immutability.
+  @override
   Future<void> updatePartnerConfig(PartnerConfig updates) async {
     final current = _configBox.get(_configKey);
     if (current != null) {
@@ -79,65 +102,68 @@ class TallyService {
     }
   }
 
-  // --- Event Operations ---
-
-  Future<void> addEvent(TallyEvent event) async {
-    try {
-      final id = event.id.isEmpty ? _generateId() : event.id;
-      final eventWithId = event.copyWith(id: id);
-      await _eventsBox.put(id, eventWithId);
-    } catch (e) {
-      rethrow;
-    }
+  @override
+  Future<void> adjustBalance(double amount) async {
+    final config = _configBox.get(_configKey);
+    if (config == null) return;
+    final newBalance = config.currentBalance + amount;
+    await _configBox.put(_configKey, config.copyWith(currentBalance: newBalance));
   }
 
+  // --- Event Operations ---
+
+  @override
+  Future<void> addEvent(TallyEvent event) async {
+    final id = event.id.isEmpty ? _generateId() : event.id;
+    final eventWithId = event.copyWith(id: id);
+    await _eventsBox.put(id, eventWithId);
+  }
+
+  @override
   List<TallyEvent> getEvents() {
     return _eventsBox.values.toList();
   }
 
+  @override
   Future<void> deleteEvent(String id) async {
-    try {
-      await _eventsBox.delete(id);
-    } catch (e) {
-      rethrow;
+    await _eventsBox.delete(id);
+    // Clean up orphaned logs for this event
+    final logsToDelete = _logsBox.values
+        .where((log) => log.eventId == id)
+        .map((log) => log.key)
+        .toList();
+    for (final key in logsToDelete) {
+      await _logsBox.delete(key);
     }
   }
 
+  @override
   Future<void> clearEvents() async {
-    try {
-      await _eventsBox.clear();
-    } catch (e) {
-      rethrow;
-    }
+    await _eventsBox.clear();
   }
 
   // --- Log Operations ---
 
+  @override
   Future<void> addLog(TallyLog log) async {
-    try {
-      final id = log.id.isEmpty ? _generateId() : log.id;
-      final logWithId = log.copyWith(id: id);
-      await _logsBox.put(id, logWithId);
-    } catch (e) {
-      rethrow;
-    }
+    final id = log.id.isEmpty ? _generateId() : log.id;
+    final logWithId = log.copyWith(id: id);
+    await _logsBox.put(id, logWithId);
   }
 
+  @override
   List<TallyLog> getLogs() {
     return _logsBox.values.toList();
   }
 
+  @override
   Future<void> clearLogs() async {
-    try {
-      await _logsBox.clear();
-    } catch (e) {
-      rethrow;
-    }
+    await _logsBox.clear();
   }
 
   // --- Tally Operations ---
 
-  /// Increments the tally for a specific event and logs it.
+  @override
   Future<void> incrementTally(String eventId, {double value = 1.0}) async {
     final event = _eventsBox.get(eventId);
     if (event != null) {
@@ -151,7 +177,7 @@ class TallyService {
     }
   }
 
-  /// Decrements the tally for a specific event and logs it.
+  @override
   Future<void> decrementTally(String eventId, {double value = 1.0}) async {
     final event = _eventsBox.get(eventId);
     if (event != null) {
@@ -165,7 +191,7 @@ class TallyService {
     }
   }
 
-  /// Gets the count of tallies for a specific event.
+  @override
   int getTallyCount(String eventId) {
     return _logsBox.values
         .where((log) => log.eventId == eventId)
@@ -173,17 +199,36 @@ class TallyService {
         .round();
   }
 
-  /// Gets logs for a specific event.
+  @override
   List<TallyLog> getLogsForEvent(String eventId) {
     return _logsBox.values
         .where((log) => log.eventId == eventId)
         .toList();
   }
 
-  /// Gets logs within a date range.
+  @override
   List<TallyLog> getLogsByDateRange(DateTime start, DateTime end) {
     return _logsBox.values
-        .where((log) => log.timestamp.isAfter(start) && log.timestamp.isBefore(end))
+        .where((log) => log.timestamp.compareTo(start) >= 0 && log.timestamp.compareTo(end) <= 0)
         .toList();
+  }
+
+  @override
+  Future<void> logPartnerAction({
+    required String name,
+    required double value,
+    required String type,
+  }) async {
+    final isPositive = type == 'positive';
+    final event = TallyEvent(
+      id: '',
+      name: name,
+      icon: isPositive ? 'thumb_up' : 'thumb_down',
+      color: isPositive ? '#4CD964' : '#FF3B30',
+      createdAt: DateTime.now(),
+      type: isPositive ? TallyType.partnerPositive : TallyType.partnerNegative,
+    );
+    await addEvent(event);
+    await adjustBalance(value);
   }
 }

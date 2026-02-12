@@ -45,7 +45,7 @@ class PartnerConfig extends HiveObject {
 
   @override
   String toString() {
-    return 'PartnerConfig(id: $id, budgetLimit: $budgetLimit, currentBalance: $currentBalance, partnerName: $partnerName, isActive: $isActive)';
+    return 'PartnerConfig(id: $id, isActive: $isActive)';
   }
 
   @override

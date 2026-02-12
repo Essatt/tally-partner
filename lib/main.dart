@@ -58,23 +58,31 @@ class TallyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const seedColor = Color(0xFF007AFF); // Apple Blue
+
+    final lightColorScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: Brightness.light,
+    );
+    final darkColorScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: Brightness.dark,
+    );
+
     return MaterialApp(
-      title: 'TallyApp',
+      title: 'Tally Partner',
       debugShowCheckedModeBanner: false,
+      themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF007AFF), // Apple Blue
-          brightness: Brightness.light,
-        ),
-        fontFamily: '.SF Pro Text', // Fallbacks to system fonts if not available
-        appBarTheme: const AppBarTheme(
+        colorScheme: lightColorScheme,
+        appBarTheme: AppBarTheme(
           systemOverlayStyle: SystemUiOverlayStyle.dark,
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
           titleTextStyle: TextStyle(
-            color: Colors.black,
+            color: lightColorScheme.onSurface,
             fontSize: 17,
             fontWeight: FontWeight.w600,
           ),
@@ -84,17 +92,49 @@ class TallyApp extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(
-              color: Colors.grey.shade200,
+              color: lightColorScheme.outlineVariant,
               width: 1,
             ),
           ),
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF007AFF),
-          foregroundColor: Colors.white,
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: lightColorScheme.primary,
+          foregroundColor: lightColorScheme.onPrimary,
           elevation: 4,
-          shape: CircleBorder(),
+          shape: const CircleBorder(),
+        ),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: darkColorScheme,
+        appBarTheme: AppBarTheme(
+          systemOverlayStyle: SystemUiOverlayStyle.light,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: darkColorScheme.onSurface,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: darkColorScheme.outlineVariant,
+              width: 1,
+            ),
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: darkColorScheme.primary,
+          foregroundColor: darkColorScheme.onPrimary,
+          elevation: 4,
+          shape: const CircleBorder(),
         ),
       ),
       home: const MainScreen(),
@@ -119,8 +159,7 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: _buildCurrentPage(),
       bottomNavigationBar: NavigationBar(
-        height: 80,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
           setState(() {
