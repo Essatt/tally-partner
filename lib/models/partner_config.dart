@@ -61,5 +61,10 @@ class PartnerConfig extends HiveObject {
   }
 
   @override
-  int get hashCode => id.hashCode ^ budgetLimit.hashCode ^ currentBalance.hashCode ^ partnerName.hashCode ^ isActive.hashCode;
+  int get hashCode =>
+      id.hashCode ^
+      budgetLimit.hashCode ^
+      currentBalance.hashCode ^
+      partnerName.hashCode ^
+      isActive.hashCode;
 }

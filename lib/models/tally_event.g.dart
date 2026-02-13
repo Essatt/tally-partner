@@ -23,13 +23,17 @@ class TallyEventAdapter extends TypeAdapter<TallyEvent> {
       color: fields[3] as String?,
       createdAt: fields[4] as DateTime,
       type: fields[5] as TallyType,
+      value: fields[6] as double? ?? 1.0,
+      personId: fields[7] as String?,
+      assignedBudgetIds: (fields[8] as List?)?.cast<String>() ?? [],
+      isFavorite: fields[9] as bool? ?? false,
     );
   }
 
   @override
   void write(BinaryWriter writer, TallyEvent obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +45,15 @@ class TallyEventAdapter extends TypeAdapter<TallyEvent> {
       ..writeByte(4)
       ..write(obj.createdAt)
       ..writeByte(5)
-      ..write(obj.type);
+      ..write(obj.type)
+      ..writeByte(6)
+      ..write(obj.value)
+      ..writeByte(7)
+      ..write(obj.personId)
+      ..writeByte(8)
+      ..write(obj.assignedBudgetIds)
+      ..writeByte(9)
+      ..write(obj.isFavorite);
   }
 
   @override

@@ -14,7 +14,8 @@ class InputSanitizer {
 
     // Remove HTML tags - multiple passes for nested/malformed tags
     for (var i = 0; i < 3; i++) {
-      sanitized = sanitized.replaceAll(RegExp(r'<[^>]*>?', caseSensitive: false), '');
+      sanitized =
+          sanitized.replaceAll(RegExp(r'<[^>]*>?', caseSensitive: false), '');
     }
 
     // Remove HTML entities
@@ -28,7 +29,8 @@ class InputSanitizer {
       r'on\w+\s*=',
     ];
     for (final pattern in xssPatterns) {
-      sanitized = sanitized.replaceAll(RegExp(pattern, caseSensitive: false), '');
+      sanitized =
+          sanitized.replaceAll(RegExp(pattern, caseSensitive: false), '');
     }
 
     // Remove excessive whitespace

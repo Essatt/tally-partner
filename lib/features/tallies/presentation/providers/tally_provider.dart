@@ -3,7 +3,8 @@ import '../../../../services/tally_repository.dart';
 import '../../../../services/tally_service.dart';
 import '../../../../models/tally_event.dart';
 import '../../../../models/tally_log.dart';
-import '../../../../models/partner_config.dart';
+import '../../../../models/person.dart';
+import '../../../../models/budget.dart';
 
 // Tally Service Provider — typed as abstract TallyRepository for testability
 final tallyServiceProvider = Provider<TallyRepository>((ref) {
@@ -22,10 +23,31 @@ final tallyLogsProvider = FutureProvider<List<TallyLog>>((ref) async {
   return service.getLogs();
 });
 
-// Partner Config Provider
-final partnerConfigProvider = FutureProvider<PartnerConfig?>((ref) async {
+// People Provider
+final peopleProvider = FutureProvider<List<Person>>((ref) async {
   final service = ref.watch(tallyServiceProvider);
-  return service.getPartnerConfig();
+  return service.getPeople();
+});
+
+// Budgets Provider
+final budgetsProvider = FutureProvider<List<Budget>>((ref) async {
+  final service = ref.watch(tallyServiceProvider);
+  return service.getBudgets();
+});
+
+// Budgets for a specific person — derived from budgetsProvider for cascading invalidation
+final budgetsForPersonProvider =
+    Provider.family<AsyncValue<List<Budget>>, String>((ref, personId) {
+  final allBudgets = ref.watch(budgetsProvider);
+  return allBudgets.whenData(
+      (budgets) => budgets.where((b) => b.personId == personId).toList());
+});
+
+// Single person lookup — derived from peopleProvider for reactivity
+final personProvider = Provider.family<Person?, String>((ref, personId) {
+  final people = ref.watch(peopleProvider);
+  return people.whenOrNull(
+      data: (list) => list.where((p) => p.id == personId).firstOrNull);
 });
 
 // Single Tally Count Provider — watches logs so it recomputes on log changes
@@ -48,6 +70,7 @@ extension TallyStateCoordinator on WidgetRef {
   /// Refresh after a tally was incremented/decremented (only logs changed).
   void refreshAfterTallyUpdate() {
     invalidate(tallyLogsProvider);
+    invalidate(budgetsProvider);
   }
 
   /// Refresh after an event was created or deleted.
@@ -56,22 +79,29 @@ extension TallyStateCoordinator on WidgetRef {
     invalidate(tallyLogsProvider);
   }
 
-  /// Refresh after a partner budget action (affects config, events, and logs).
+  /// Refresh after a partner budget action (affects events, logs, and budgets).
   void refreshAfterPartnerAction() {
-    invalidate(partnerConfigProvider);
     invalidate(tallyEventsProvider);
     invalidate(tallyLogsProvider);
+    invalidate(budgetsProvider);
   }
 
-  /// Refresh after partner config was set up or updated.
-  void refreshAfterConfigChange() {
-    invalidate(partnerConfigProvider);
+  /// Refresh after a person was added, updated, or deleted.
+  void refreshAfterPersonChange() {
+    invalidate(peopleProvider);
+    invalidate(budgetsProvider);
+  }
+
+  /// Refresh after a budget was added, updated, or deleted.
+  void refreshAfterBudgetChange() {
+    invalidate(budgetsProvider);
   }
 
   /// Refresh everything (e.g. pull-to-refresh).
   void refreshAll() {
     invalidate(tallyEventsProvider);
     invalidate(tallyLogsProvider);
-    invalidate(partnerConfigProvider);
+    invalidate(peopleProvider);
+    invalidate(budgetsProvider);
   }
 }

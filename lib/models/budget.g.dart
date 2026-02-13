@@ -1,44 +1,47 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'tally_log.dart';
+part of 'budget.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class TallyLogAdapter extends TypeAdapter<TallyLog> {
+class BudgetAdapter extends TypeAdapter<Budget> {
   @override
-  final int typeId = 4;
+  final int typeId = 8;
 
   @override
-  TallyLog read(BinaryReader reader) {
+  Budget read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return TallyLog(
+    return Budget(
       id: fields[0] as String,
-      eventId: fields[1] as String,
-      timestamp: fields[2] as DateTime,
-      valueAdjustment: fields[3] as double,
-      budgetAdjustments: (fields[4] as Map?)?.cast<String, double>() ?? {},
+      personId: fields[1] as String,
+      name: fields[2] as String,
+      budgetLimit: fields[3] as double,
+      currentBalance: fields[4] as double,
+      createdAt: fields[5] as DateTime,
     );
   }
 
   @override
-  void write(BinaryWriter writer, TallyLog obj) {
+  void write(BinaryWriter writer, Budget obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.eventId)
+      ..write(obj.personId)
       ..writeByte(2)
-      ..write(obj.timestamp)
+      ..write(obj.name)
       ..writeByte(3)
-      ..write(obj.valueAdjustment)
+      ..write(obj.budgetLimit)
       ..writeByte(4)
-      ..write(obj.budgetAdjustments);
+      ..write(obj.currentBalance)
+      ..writeByte(5)
+      ..write(obj.createdAt);
   }
 
   @override
@@ -47,7 +50,7 @@ class TallyLogAdapter extends TypeAdapter<TallyLog> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is TallyLogAdapter &&
+      other is BudgetAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

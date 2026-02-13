@@ -22,6 +22,18 @@ class TallyEvent extends HiveObject {
   @HiveField(5)
   final TallyType type;
 
+  @HiveField(6)
+  final double value;
+
+  @HiveField(7)
+  final String? personId;
+
+  @HiveField(8)
+  final List<String> assignedBudgetIds;
+
+  @HiveField(9)
+  final bool isFavorite;
+
   TallyEvent({
     required this.id,
     required this.name,
@@ -29,6 +41,10 @@ class TallyEvent extends HiveObject {
     this.color,
     required this.createdAt,
     required this.type,
+    this.value = 1.0,
+    this.personId,
+    this.assignedBudgetIds = const [],
+    this.isFavorite = false,
   });
 
   TallyEvent copyWith({
@@ -38,6 +54,10 @@ class TallyEvent extends HiveObject {
     String? color,
     DateTime? createdAt,
     TallyType? type,
+    double? value,
+    String? personId,
+    List<String>? assignedBudgetIds,
+    bool? isFavorite,
   }) {
     return TallyEvent(
       id: id ?? this.id,
@@ -46,6 +66,10 @@ class TallyEvent extends HiveObject {
       color: color ?? this.color,
       createdAt: createdAt ?? this.createdAt,
       type: type ?? this.type,
+      value: value ?? this.value,
+      personId: personId ?? this.personId,
+      assignedBudgetIds: assignedBudgetIds ?? this.assignedBudgetIds,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 }

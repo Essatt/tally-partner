@@ -16,11 +16,15 @@ class TallyLog extends HiveObject {
   @HiveField(3)
   final double valueAdjustment;
 
+  @HiveField(4)
+  final Map<String, double> budgetAdjustments;
+
   TallyLog({
     required this.id,
     required this.eventId,
     required this.timestamp,
     this.valueAdjustment = 1.0,
+    this.budgetAdjustments = const {},
   });
 
   TallyLog copyWith({
@@ -28,12 +32,14 @@ class TallyLog extends HiveObject {
     String? eventId,
     DateTime? timestamp,
     double? valueAdjustment,
+    Map<String, double>? budgetAdjustments,
   }) {
     return TallyLog(
       id: id ?? this.id,
       eventId: eventId ?? this.eventId,
       timestamp: timestamp ?? this.timestamp,
       valueAdjustment: valueAdjustment ?? this.valueAdjustment,
+      budgetAdjustments: budgetAdjustments ?? this.budgetAdjustments,
     );
   }
 }
